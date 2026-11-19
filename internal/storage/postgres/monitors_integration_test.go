@@ -35,7 +35,7 @@ func setupIntegrationDB(t *testing.T) (*sql.DB, *MonitorRepository) {
 
 	// Integration tests use a dedicated test database.
 	// Clear previous test data before each test.
-	if _, err := db.ExecContext(ctx, "TRUNCATE TABLE monitors"); err != nil {
+	if _, err := db.ExecContext(ctx, "TRUNCATE TABLE monitors CASCADE"); err != nil {
 		db.Close()
 		t.Fatalf("truncate monitors: %v", err)
 	}
@@ -49,7 +49,7 @@ func setupIntegrationDB(t *testing.T) (*sql.DB, *MonitorRepository) {
 
 		if _, err := db.ExecContext(
 			cleanupCtx,
-			"TRUNCATE TABLE monitors",
+			"TRUNCATE TABLE monitors CASCADE",
 		); err != nil {
 			t.Errorf("cleanup monitors: %v", err)
 		}
