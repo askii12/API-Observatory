@@ -143,6 +143,14 @@ func (p *HTTPProbe) Check(
 		io.LimitReader(response.Body, maxResponseBodyBytes+1),
 	)
 
+	if err := checkCtx.Err(); err != nil {
+		result.CheckedAt = time.Now().UTC()
+		return failedResult(
+			result,
+			fmt.Sprintf("HTTP probe timed out or was cancelled: %v", err),
+		)
+	}
+
 	statusCode := response.StatusCode
 	result.StatusCode = &statusCode
 
