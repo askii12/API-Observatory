@@ -49,8 +49,12 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-func decodeJSON(r *http.Request, dst any) error {
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+func decodeJSON(
+	w http.ResponseWriter,
+	r *http.Request,
+	dst any,
+) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -92,7 +96,7 @@ var uuidPattern = regexp.MustCompile(
 func (h *MonitorHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createMonitorRequest
 
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
@@ -174,7 +178,7 @@ func (h *MonitorHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req updateMonitorRequest
 
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
