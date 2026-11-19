@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/askii12/api-observatory/internal/storage/postgres"
+	httptransport "github.com/askii12/api-observatory/internal/transport/http"
 	"github.com/askii12/api-observatory/migrations"
 )
 
@@ -38,8 +39,13 @@ func main() {
 	log.Println("Database connected")
 	log.Println("Database migrations completed")
 
+	// Initialize repository and handler.
+	monitorRepo := postgres.NewMonitorRepository(db)
+	monitorHandler := httptransport.NewMonitorHandler(monitorRepo)
+
 	mux := http.NewServeMux()
 
+	// Health endpoints.
 	mux.HandleFunc("GET /healthz", func(
 		w http.ResponseWriter,
 		r *http.Request,
@@ -54,11 +60,9 @@ func main() {
 		r *http.Request,
 	) {
 		if err := db.PingContext(r.Context()); err != nil {
-			http.Error(
-				w,
-				`{"status":"not_ready"}`,
-				http.StatusServiceUnavailable,
-			)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"not_ready"}`))
 			return
 		}
 
@@ -66,6 +70,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ready"}`))
 	})
+
+	// Monitor endpoints.
+	mux.HandleFunc("POST /api/v1/monitors", monitorHandler.Create)
+	mux.HandleFunc("GET /api/v1/monitors", monitorHandler.List)
+	mux.HandleFunc("GET /api/v1/monitors/{id}", monitorHandler.Get)
+	mux.HandleFunc("PUT /api/v1/monitors/{id}", monitorHandler.Update)
+	mux.HandleFunc("DELETE /api/v1/monitors/{id}", monitorHandler.Delete)
 
 	server := &http.Server{
 		Addr:              addr,
