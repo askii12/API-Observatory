@@ -585,3 +585,11 @@ func TestCreateMonitorInvalidTimeout(t *testing.T) {
 		})
 	}
 }
+func (m *mockMonitorRepository) ClaimDue(
+	ctx context.Context,
+	workerID string,
+	limit int,
+	leaseDuration time.Duration,
+) ([]domain.Monitor, error) {
+	return []domain.Monitor{}, nil
+}

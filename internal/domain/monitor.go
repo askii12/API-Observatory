@@ -23,4 +23,10 @@ type MonitorRepository interface {
 	GetByID(ctx context.Context, id string) (*Monitor, error)
 	Update(ctx context.Context, monitor *Monitor) error
 	Delete(ctx context.Context, id string) error
+	ClaimDue(
+		ctx context.Context,
+		workerID string,
+		limit int,
+		leaseDuration time.Duration,
+	) ([]Monitor, error)
 }

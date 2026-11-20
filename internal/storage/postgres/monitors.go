@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/askii12/api-observatory/internal/domain"
 )
@@ -193,4 +196,97 @@ func (r *MonitorRepository) Delete(
 	}
 
 	return nil
+}
+
+func (r *MonitorRepository) ClaimDue(
+	ctx context.Context,
+	workerID string,
+	limit int,
+	leaseDuration time.Duration,
+) ([]domain.Monitor, error) {
+	workerID = strings.TrimSpace(workerID)
+
+	if workerID == "" {
+		return nil, fmt.Errorf("worker ID must not be empty")
+	}
+
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be positive")
+	}
+
+	if leaseDuration < time.Microsecond {
+		return nil, fmt.Errorf("lease duration must be at least one microsecond")
+	}
+
+	const query = `
+        WITH due_monitors AS (
+            SELECT id
+            FROM monitors
+            WHERE enabled = TRUE
+              AND next_run_at <= NOW()
+              AND (
+                  lease_expires_at IS NULL
+                  OR lease_expires_at <= NOW()
+              )
+            ORDER BY next_run_at ASC, id ASC
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE monitors AS m
+        SET
+            lease_owner = $2,
+            lease_expires_at = NOW() + ($3 * INTERVAL '1 microsecond')
+        FROM due_monitors AS due
+        WHERE m.id = due.id
+        RETURNING
+            m.id,
+            m.name,
+            m.url,
+            m.interval_seconds,
+            m.timeout_ms,
+            m.enabled,
+            m.next_run_at,
+            m.created_at,
+            m.updated_at
+    `
+
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		limit,
+		workerID,
+		leaseDuration.Microseconds(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("claim due monitors: %w", err)
+	}
+	defer rows.Close()
+
+	monitors := make([]domain.Monitor, 0)
+
+	for rows.Next() {
+		var monitor domain.Monitor
+
+		if err := rows.Scan(
+			&monitor.ID,
+			&monitor.Name,
+			&monitor.URL,
+			&monitor.IntervalSeconds,
+			&monitor.TimeoutMs,
+			&monitor.Enabled,
+			&monitor.NextRunAt,
+			&monitor.CreatedAt,
+			&monitor.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan claimed monitor: %w", err)
+		}
+
+		monitors = append(monitors, monitor)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate claimed monitors: %w", err)
+	}
+
+	return monitors, nil
 }
